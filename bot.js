@@ -1,6 +1,14 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+
+// ========== ЗАГЛУШКА ДЛЯ RENDER ==========
+const server = http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('Bot is running!');
+});
+server.listen(process.env.PORT || 10000);
 
 // ========== ТВОИ ДАННЫЕ ==========
 const token = '8287807569:AAFoSzNjsGf2AQMTp3y-GbSTU-r4-AFmcvE';
@@ -238,7 +246,7 @@ bot.on('callback_query', async (query) => {
             deals.set(dealId, deal);
             saveData();
             
-            // ========== ИСПРАВЛЕНО: уведомление ТОЛЬКО продавцу ==========
+            // Уведомление только продавцу
             await bot.sendMessage(
                 deal.sellerId,
                 `💰 Сделка #${dealId} оплачена!\n\nПокупатель: @${deal.buyerUsername}\nСумма: ${deal.amount} ${deal.currency}\n\nПодтвердите:`,

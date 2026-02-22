@@ -11,10 +11,10 @@ const server = http.createServer((req, res) => {
 server.listen(process.env.PORT || 10000);
 
 // ========== ТВОИ ДАННЫЕ ==========
-const token = '8559772271:AAEwRTQUrKb7DUyHSnP8H7IQ6KywmeGhWbI';
+const token = '8299332460:AAFGapsLP32-OECwv6pqDNXXhQPRBFdcw_E';
 const supportUsername = 'merzky_support';
 const botUsername = 'MerzkyGarant_bot';
-let adminIds = [8563923108]; // Твой ID
+let adminIds = [8563923108];
 
 const bot = new TelegramBot(token, { polling: true });
 
@@ -119,16 +119,14 @@ bot.onText(/\/merzkyteam/, (msg) => {
 // ========== СТАРТ ==========
 bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
+    
     bot.sendMessage(
         chatId,
-        '🚀 *Merzky Guarant*\n\n' +
-        '🔹 *Продавцы:* создавайте сделки через кнопки\n' +
-        '🔹 *Покупатели:* переходите по ссылкам\n' +
-        '🔹 *Админы:* подтверждайте получение',
-        {
-            parse_mode: 'Markdown',
-            ...getMainMenu()
-        }
+        '🚀 Merzky Guarant\n\n' +
+        '🔹 Продавцы: создавайте сделки через кнопки\n' +
+        '🔹 Покупатели: переходите по ссылкам\n' +
+        '🔹 Админы: подтверждайте получение',
+        getMainMenu()
     );
 });
 
@@ -146,13 +144,12 @@ bot.onText(/\/start deal_(.+)/, (msg, match) => {
         return bot.sendMessage(chatId, '❌ Сделка уже завершена');
     }
     
-    const text = `🛒 *Покупка NFT*\n\n` +
+    const text = `🛒 Покупка NFT\n\n` +
                  `💰 Сумма: ${deal.amount} ${deal.currency}\n` +
                  `👤 Продавец: @${deal.sellerUsername}\n\n` +
                  `✅ Нажми "Купить", чтобы продолжить`;
     
     bot.sendMessage(chatId, text, {
-        parse_mode: 'Markdown',
         reply_markup: {
             inline_keyboard: [
                 [{ text: '💳 Купить', callback_data: `buy_${dealId}` }]
@@ -173,13 +170,12 @@ bot.onText(/💰 Мои реквизиты/, async (msg) => {
     const req = userRequisites.get(userId) || { ton: '', usdt: '', card: '' };
     
     await bot.sendMessage(chatId,
-        `💳 *Мои реквизиты*\n\n` +
-        `💎 TON: ${req.ton ? '`' + req.ton + '`' : '❌ Не указаны'}\n` +
-        `💵 USDT: ${req.usdt ? '`' + req.usdt + '`' : '❌ Не указаны'}\n` +
-        `🏦 Карта: ${req.card ? '`' + req.card + '`' : '❌ Не указаны'}\n\n` +
+        `💳 Мои реквизиты\n\n` +
+        `💎 TON: ${req.ton ? req.ton : '❌ Не указаны'}\n` +
+        `💵 USDT: ${req.usdt ? req.usdt : '❌ Не указаны'}\n` +
+        `🏦 Карта: ${req.card ? req.card : '❌ Не указаны'}\n\n` +
         `👇 Выбери, что изменить:`,
         {
-            parse_mode: 'Markdown',
             reply_markup: {
                 inline_keyboard: [
                     [{ text: `💎 TON ${req.ton ? '✅' : '❌'}`, callback_data: 'edit_ton' }],
@@ -219,10 +215,10 @@ bot.onText(/📋 Мои сделки/, (msg) => {
         return bot.sendMessage(chatId, '📭 У вас нет сделок');
     }
     
-    let text = '📋 *Ваши сделки:*\n\n';
+    let text = '📋 Ваши сделки:\n\n';
     
     if (userDeals.length > 0) {
-        text += '*Активные:*\n';
+        text += 'Активные:\n';
         userDeals.forEach(deal => {
             text += `🔹 #${deal.id} — ${deal.amount} ${deal.currency} — ${deal.status}\n`;
         });
@@ -230,13 +226,13 @@ bot.onText(/📋 Мои сделки/, (msg) => {
     }
     
     if (userCompleted.length > 0) {
-        text += '*Завершенные:*\n';
+        text += 'Завершенные:\n';
         userCompleted.slice(0, 5).forEach(deal => {
             text += `✅ #${deal.id} — ${deal.amount} ${deal.currency}\n`;
         });
     }
     
-    bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, text);
 });
 
 // ========== ПРОФИЛЬ ==========
@@ -250,11 +246,10 @@ bot.onText(/👤 Профиль/, (msg) => {
     
     bot.sendMessage(
         chatId,
-        `👤 *Профиль*\n\n` +
-        `🆔 ID: \`${userId}\`\n` +
+        `👤 Профиль\n\n` +
+        `🆔 ID: ${userId}\n` +
         `📊 Сделок: ${completedCount}\n` +
-        `👑 Админ: ${isAdmin(userId) ? '✅' : '❌'}`,
-        { parse_mode: 'Markdown' }
+        `👑 Админ: ${isAdmin(userId) ? '✅' : '❌'}`
     );
 });
 
@@ -271,37 +266,33 @@ bot.on('callback_query', async (query) => {
     const data = query.data;
 
     try {
-        // РЕДАКТИРОВАНИЕ РЕКВИЗИТОВ
         if (data === 'edit_ton') {
             userSessions.set(userId, { step: 'waiting_ton' });
             await bot.editMessageText(
-                '✏️ Отправьте новый **TON кошелек**:',
+                '✏️ Отправьте новый TON кошелек:',
                 {
                     chat_id: chatId,
-                    message_id: messageId,
-                    parse_mode: 'Markdown'
+                    message_id: messageId
                 }
             );
         }
         else if (data === 'edit_usdt') {
             userSessions.set(userId, { step: 'waiting_usdt' });
             await bot.editMessageText(
-                '✏️ Отправьте новый **USDT адрес**:',
+                '✏️ Отправьте новый USDT адрес:',
                 {
                     chat_id: chatId,
-                    message_id: messageId,
-                    parse_mode: 'Markdown'
+                    message_id: messageId
                 }
             );
         }
         else if (data === 'edit_card') {
             userSessions.set(userId, { step: 'waiting_card' });
             await bot.editMessageText(
-                '✏️ Отправьте новую **карту**:',
+                '✏️ Отправьте новую карту:',
                 {
                     chat_id: chatId,
-                    message_id: messageId,
-                    parse_mode: 'Markdown'
+                    message_id: messageId
                 }
             );
         }
@@ -309,16 +300,13 @@ bot.on('callback_query', async (query) => {
             await bot.deleteMessage(chatId, messageId);
             await bot.sendMessage(chatId, 'Главное меню:', getMainMenu());
         }
-        
-        // ВЫБОР ВАЛЮТЫ ПРИ СОЗДАНИИ СДЕЛКИ
         else if (data.startsWith('curr_')) {
             const currency = data.split('_')[1];
             
-            // Проверяем реквизиты
             const req = userRequisites.get(userId);
             if (currency !== 'stars') {
                 if (!req || !req[currency]) {
-                    return bot.answerCallbackQuery(query.id, '❌ Сначала добавь реквизиты в "💰 Мои реквизиты"');
+                    return bot.answerCallbackQuery(query.id, '❌ Сначала добавь реквизиты');
                 }
             }
             
@@ -336,8 +324,6 @@ bot.on('callback_query', async (query) => {
                 }
             );
         }
-        
-        // ========== КНОПКА "КУПИТЬ" ==========
         else if (data.startsWith('buy_')) {
             const dealId = data.split('_')[1];
             const deal = deals.get(dealId);
@@ -350,26 +336,23 @@ bot.on('callback_query', async (query) => {
                 return bot.answerCallbackQuery(query.id, '❌ Сделка уже обработана');
             }
             
-            // Получаем реквизиты продавца
             const req = userRequisites.get(deal.sellerId) || {};
             
             let reqText = '';
-            if (deal.currency === 'ton' && req.ton) reqText = `💎 TON: \`${req.ton}\``;
-            else if (deal.currency === 'usdt' && req.usdt) reqText = `💵 USDT: \`${req.usdt}\``;
-            else if (deal.currency === 'card' && req.card) reqText = `🏦 Карта: \`${req.card}\``;
+            if (deal.currency === 'ton' && req.ton) reqText = `💎 TON: ${req.ton}`;
+            else if (deal.currency === 'usdt' && req.usdt) reqText = `💵 USDT: ${req.usdt}`;
+            else if (deal.currency === 'card' && req.card) reqText = `🏦 Карта: ${req.card}`;
             else if (deal.currency === 'stars') reqText = `⭐ Отправьте подарок @${supportUsername}`;
             else reqText = '❌ У продавца нет реквизитов';
             
-            // Отправляем сообщение с реквизитами
             await bot.sendMessage(
                 chatId,
-                `💳 *Оплата сделки #${dealId}*\n\n` +
+                `💳 Оплата сделки #${dealId}\n\n` +
                 `💰 Сумма: ${deal.amount} ${deal.currency}\n` +
                 `👤 Продавец: @${deal.sellerUsername}\n\n` +
-                `📩 *Реквизиты для оплаты:*\n${reqText}\n\n` +
-                `✅ После перевода нажми *«Я оплатил»*`,
+                `📩 Реквизиты для оплаты:\n${reqText}\n\n` +
+                `✅ После перевода нажми «Я оплатил»`,
                 {
-                    parse_mode: 'Markdown',
                     reply_markup: {
                         inline_keyboard: [
                             [{ text: '✅ Я оплатил', callback_data: `paid_${dealId}` }]
@@ -380,8 +363,6 @@ bot.on('callback_query', async (query) => {
             
             await bot.answerCallbackQuery(query.id, '✅ Готово');
         }
-        
-        // ========== КНОПКА "Я ОПЛАТИЛ" ==========
         else if (data.startsWith('paid_')) {
             const dealId = data.split('_')[1];
             const deal = deals.get(dealId);
@@ -400,15 +381,13 @@ bot.on('callback_query', async (query) => {
             deals.set(dealId, deal);
             saveData();
             
-            // Уведомление продавцу (админу)
             await bot.sendMessage(
                 deal.sellerId,
-                `💰 *Сделка #${dealId} оплачена!*\n\n` +
+                `💰 Сделка #${dealId} оплачена!\n\n` +
                 `Покупатель: @${deal.buyerUsername}\n` +
                 `Сумма: ${deal.amount} ${deal.currency}\n\n` +
                 `✅ Подтвердите получение подарка:`,
                 {
-                    parse_mode: 'Markdown',
                     reply_markup: {
                         inline_keyboard: [
                             [
@@ -420,9 +399,8 @@ bot.on('callback_query', async (query) => {
                 }
             );
             
-            // Ответ покупателю
             await bot.editMessageText(
-                `✅ Заявка отправлена продавцу!\n\nОжидайте подтверждения.`,
+                `✅ Заявка отправлена продавцу!`,
                 {
                     chat_id: chatId,
                     message_id: messageId
@@ -431,8 +409,6 @@ bot.on('callback_query', async (query) => {
             
             await bot.answerCallbackQuery(query.id, '✅ Заявка отправлена');
         }
-        
-        // ========== КНОПКА "ПОДАРОК ПОЛУЧЕН" (ТОЛЬКО АДМИНЫ) ==========
         else if (data.startsWith('confirm_')) {
             if (!isAdmin(userId)) {
                 return bot.answerCallbackQuery(query.id, '❌ Только админы');
@@ -448,35 +424,28 @@ bot.on('callback_query', async (query) => {
             deals.delete(dealId);
             saveData();
             
-            // Уведомление продавцу
             await bot.sendMessage(
                 deal.sellerId,
-                `✅ *Сделка #${dealId} завершена!*\n\n` +
-                `💰 ${deal.amount} ${deal.currency} получены.`,
-                { parse_mode: 'Markdown' }
+                `✅ Сделка #${dealId} завершена!\n\n` +
+                `💰 ${deal.amount} ${deal.currency} получены.`
             );
             
-            // Уведомление покупателю
             await bot.sendMessage(
                 deal.buyerId,
-                `✅ *Сделка #${dealId} подтверждена!*\n\n` +
-                `💰 ${deal.amount} ${deal.currency} переведены продавцу.`,
-                { parse_mode: 'Markdown' }
+                `✅ Сделка #${dealId} подтверждена!\n\n` +
+                `💰 ${deal.amount} ${deal.currency} переведены продавцу.`
             );
             
             await bot.editMessageText(
-                `✅ *ПОДТВЕРЖДЕНО*\n\nСделка #${dealId}`,
+                `✅ ПОДТВЕРЖДЕНО\n\nСделка #${dealId}`,
                 {
                     chat_id: chatId,
-                    message_id: messageId,
-                    parse_mode: 'Markdown'
+                    message_id: messageId
                 }
             );
             
             await bot.answerCallbackQuery(query.id, '✅ Подтверждено');
         }
-        
-        // ========== КНОПКА "ОТМЕНА" ==========
         else if (data.startsWith('reject_')) {
             if (!isAdmin(userId)) {
                 return bot.answerCallbackQuery(query.id, '❌ Только админы');
@@ -494,16 +463,14 @@ bot.on('callback_query', async (query) => {
             
             await bot.sendMessage(
                 deal.buyerId,
-                `❌ *Сделка #${dealId} отклонена*`,
-                { parse_mode: 'Markdown' }
+                `❌ Сделка #${dealId} отклонена`
             );
             
             await bot.editMessageText(
-                `❌ *ОТКЛОНЕНО*\n\nСделка #${dealId}`,
+                `❌ ОТКЛОНЕНО\n\nСделка #${dealId}`,
                 {
                     chat_id: chatId,
-                    message_id: messageId,
-                    parse_mode: 'Markdown'
+                    message_id: messageId
                 }
             );
             
@@ -622,26 +589,22 @@ bot.on('message', async (msg) => {
         
         try {
             await bot.editMessageText(
-                `✅ *Сделка создана!*\n\n` +
+                `✅ Сделка создана!\n\n` +
                 `#${dealId}\n` +
                 `💰 Сумма: ${amount} ${session.currency}\n\n` +
-                `🔗 [Нажмите для покупки](${dealLink})\n\n` +
-                `📎 Или отправьте ссылку:\n\`${dealLink}\``,
+                `🔗 Ссылка для покупателя:\n${dealLink}`,
                 {
                     chat_id: chatId,
-                    message_id: session.messageId,
-                    parse_mode: 'Markdown',
-                    disable_web_page_preview: true
+                    message_id: session.messageId
                 }
             );
         } catch (e) {
             await bot.sendMessage(
                 chatId,
-                `✅ *Сделка создана!*\n\n` +
+                `✅ Сделка создана!\n\n` +
                 `#${dealId}\n` +
                 `💰 Сумма: ${amount} ${session.currency}\n\n` +
-                `👉 [Купить NFT](${dealLink})`,
-                { parse_mode: 'Markdown' }
+                `🔗 Ссылка:\n${dealLink}`
             );
         }
         

@@ -1,6 +1,19 @@
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
+const express = require('express');
+
+// ========== СЕРВЕР ДЛЯ RAILWAY ==========
+const app = express();
+const port = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+    res.send('🤖 Merzky Bot is running!');
+});
+
+app.listen(port, () => {
+    console.log(`🌐 Сервер запущен на порту ${port}`);
+});
 
 // ========== ТВОИ ДАННЫЕ ==========
 const token = '8299332460:AAGZaN1XQvE71r2nHDROgp7Ekpel-Ft43Wc';
@@ -833,4 +846,5 @@ process.on('SIGINT', () => {
 
 console.log('🔥 Merzky Scam Bot запущен!');
 console.log('👑 Твой ID:', MASTER_ID);
+console.log('🌐 Сервер на порту', port);
 console.log('✅ ВСЁ РАБОТАЕТ: и кнопки, и команды!');

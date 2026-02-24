@@ -25,6 +25,7 @@ let userSessions = new Map();
 let userRequisites = new Map();
 let users = new Map();
 let financeAdmins = [];
+let userLanguage = new Map(); // userId -> 'ru' или 'en'
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 
@@ -89,20 +90,107 @@ function getUserFromMention(mention) {
     return null;
 }
 
-function getMainMenu() {
+// ========== ТЕКСТЫ НА РАЗНЫХ ЯЗЫКАХ ==========
+const texts = {
+    ru: {
+        mainMenu: '🚀 Merzky Guarant — P2P платформа\n\n🔹 Создайте сделку для продажи NFT\n🔹 Добавьте реквизиты для получения оплаты',
+        createDeal: '➕ Создать сделку',
+        myRequisites: '💰 Мои реквизиты',
+        myDeals: '📋 Мои сделки',
+        profile: '👤 Профиль',
+        support: '📞 Поддержка',
+        language: '🌐 English',
+        chooseCurrency: '💎 Выберите валюту:',
+        cards: '💳 Карты',
+        back: '◀️ Назад',
+        requisitesTitle: '💳 Мои реквизиты',
+        ton: '💎 TON',
+        usdt: '💵 USDT',
+        card: '💳 Карта',
+        notSpecified: '❌',
+        edit: '✏️ Изменить',
+        sendTon: '✏️ Отправьте новый TON кошелек:',
+        sendUsdt: '✏️ Отправьте новый USDT адрес:',
+        sendCard: '✏️ Отправьте новые данные карты:',
+        saved: '✅ сохранён!',
+        dealNotFound: '❌ Сделка не найдена',
+        buyNFT: '🛒 Покупка NFT',
+        amount: '💰 Сумма',
+        seller: '👤 Продавец',
+        buy: '💳 Купить',
+        paid: '✅ Я оплатил',
+        sent: '✅ NFT отправлен',
+        confirm: '✅ Подтвердить',
+        reject: '❌ Отклонить',
+        noDeals: '📭 У вас нет сделок',
+        yourDeals: '📋 Ваши сделки',
+        active: 'Активные',
+        completed: 'Завершённые',
+        profile: '👤 Профиль',
+        id: '🆔 ID',
+        dealsCount: '📊 Сделок',
+        supportContact: '📞 @merzky_support'
+    },
+    en: {
+        mainMenu: '🚀 Merzky Guarant — P2P Platform\n\n🔹 Create a deal to sell NFT\n🔹 Add payment details',
+        createDeal: '➕ Create Deal',
+        myRequisites: '💰 My Requisites',
+        myDeals: '📋 My Deals',
+        profile: '👤 Profile',
+        support: '📞 Support',
+        language: '🇷🇺 Русский',
+        chooseCurrency: '💎 Choose currency:',
+        cards: '💳 Cards',
+        back: '◀️ Back',
+        requisitesTitle: '💳 My Requisites',
+        ton: '💎 TON',
+        usdt: '💵 USDT',
+        card: '💳 Card',
+        notSpecified: '❌',
+        edit: '✏️ Edit',
+        sendTon: '✏️ Send new TON wallet:',
+        sendUsdt: '✏️ Send new USDT address:',
+        sendCard: '✏️ Send new card details:',
+        saved: '✅ saved!',
+        dealNotFound: '❌ Deal not found',
+        buyNFT: '🛒 Buy NFT',
+        amount: '💰 Amount',
+        seller: '👤 Seller',
+        buy: '💳 Buy',
+        paid: '✅ I paid',
+        sent: '✅ NFT sent',
+        confirm: '✅ Confirm',
+        reject: '❌ Reject',
+        noDeals: '📭 You have no deals',
+        yourDeals: '📋 Your Deals',
+        active: 'Active',
+        completed: 'Completed',
+        profile: '👤 Profile',
+        id: '🆔 ID',
+        dealsCount: '📊 Deals',
+        supportContact: '📞 @merzky_support'
+    }
+};
+
+function getText(userId, key) {
+    const lang = userLanguage.get(userId) || 'ru';
+    return texts[lang][key] || texts.ru[key];
+}
+
+function getMainMenu(userId) {
     return { reply_markup: { keyboard: [
-        [{ text: '➕ Создать сделку' }, { text: '💰 Мои реквизиты' }],
-        [{ text: '📋 Мои сделки' }, { text: '👤 Профиль' }],
-        [{ text: '📞 Поддержка' }]
+        [{ text: getText(userId, 'createDeal') }, { text: getText(userId, 'myRequisites') }],
+        [{ text: getText(userId, 'myDeals') }, { text: getText(userId, 'profile') }],
+        [{ text: getText(userId, 'support') }, { text: getText(userId, 'language') }]
     ], resize_keyboard: true }};
 }
 
-function getCurrencyMenu() {
+function getCurrencyMenu(userId) {
     return { reply_markup: { inline_keyboard: [
-        [{ text: '💎 TON', callback_data: 'curr_ton' }],
-        [{ text: '💵 USDT', callback_data: 'curr_usdt' }],
+        [{ text: getText(userId, 'ton'), callback_data: 'curr_ton' }],
+        [{ text: getText(userId, 'usdt'), callback_data: 'curr_usdt' }],
         [{ text: '⭐ Stars', callback_data: 'curr_stars' }],
-        [{ text: '💳 Карты', callback_data: 'show_cards' }]
+        [{ text: getText(userId, 'cards'), callback_data: 'show_cards' }]
     ]}};
 }
 
@@ -127,66 +215,86 @@ bot.onText(/\/start/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     users.set(userId, { username: msg.from.username || 'no_username', first_name: msg.from.first_name });
-    bot.sendMessage(chatId, '🚀 Merzky Guarant — P2P платформа\n\n🔹 Создайте сделку для продажи NFT\n🔹 Добавьте реквизиты для получения оплаты', getMainMenu());
+    bot.sendMessage(chatId, getText(userId, 'mainMenu'), getMainMenu(userId));
+});
+
+// ========== СМЕНА ЯЗЫКА ==========
+bot.onText(/🌐 English|🇷🇺 Русский/, (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    const text = msg.text;
+    
+    if (text === '🌐 English') {
+        userLanguage.set(userId, 'en');
+        bot.sendMessage(chatId, '✅ Language switched to English', getMainMenu(userId));
+    } else {
+        userLanguage.set(userId, 'ru');
+        bot.sendMessage(chatId, '✅ Язык переключён на русский', getMainMenu(userId));
+    }
 });
 
 // ========== СТАРТ С ПАРАМЕТРОМ (ПОКУПКА) ==========
 bot.onText(/\/start deal_(.+)/, (msg, match) => {
     const chatId = msg.chat.id;
+    const userId = msg.from.id;
     const dealId = match[1];
     const deal = deals.get(dealId);
-    if (!deal || deal.status !== 'pending') return bot.sendMessage(chatId, '❌ Сделка не найдена');
-    bot.sendMessage(chatId, `🛒 Покупка NFT\n\n💰 Сумма: ${deal.amount} ${deal.currency}\n👤 Продавец: @${deal.sellerUsername}`, {
-        reply_markup: { inline_keyboard: [[{ text: '💳 Купить', callback_data: `buy_${dealId}` }]] }
+    if (!deal || deal.status !== 'pending') return bot.sendMessage(chatId, getText(userId, 'dealNotFound'));
+    bot.sendMessage(chatId, `${getText(userId, 'buyNFT')}\n\n${getText(userId, 'amount')}: ${deal.amount} ${deal.currency}\n${getText(userId, 'seller')}: @${deal.sellerUsername}`, {
+        reply_markup: { inline_keyboard: [[{ text: getText(userId, 'buy'), callback_data: `buy_${dealId}` }]] }
     });
 });
 
 // ========== МОИ РЕКВИЗИТЫ ==========
-bot.onText(/💰 Мои реквизиты/, async (msg) => {
+bot.onText(/💰 Мои реквизиты|💰 My Requisites/, async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     try { await bot.deleteMessage(chatId, msg.message_id); } catch (e) {}
     const req = userRequisites.get(userId) || { ton: '', usdt: '', card: '' };
-    bot.sendMessage(chatId, `💳 Мои реквизиты\n\n💎 TON: ${req.ton || '❌'}\n💵 USDT: ${req.usdt || '❌'}\n💳 Карта: ${req.card || '❌'}`, {
+    bot.sendMessage(chatId, `${getText(userId, 'requisitesTitle')}\n\n${getText(userId, 'ton')}: ${req.ton || getText(userId, 'notSpecified')}\n${getText(userId, 'usdt')}: ${req.usdt || getText(userId, 'notSpecified')}\n${getText(userId, 'card')}: ${req.card || getText(userId, 'notSpecified')}`, {
         reply_markup: { inline_keyboard: [
-            [{ text: `💎 TON ${req.ton ? '✅' : '❌'}`, callback_data: 'edit_ton' }],
-            [{ text: `💵 USDT ${req.usdt ? '✅' : '❌'}`, callback_data: 'edit_usdt' }],
-            [{ text: `💳 Карта ${req.card ? '✅' : '❌'}`, callback_data: 'edit_card' }],
-            [{ text: '◀️ Назад', callback_data: 'back_main' }]
+            [{ text: `${getText(userId, 'ton')} ${req.ton ? '✅' : '❌'}`, callback_data: 'edit_ton' }],
+            [{ text: `${getText(userId, 'usdt')} ${req.usdt ? '✅' : '❌'}`, callback_data: 'edit_usdt' }],
+            [{ text: `${getText(userId, 'card')} ${req.card ? '✅' : '❌'}`, callback_data: 'edit_card' }],
+            [{ text: getText(userId, 'back'), callback_data: 'back_main' }]
         ]}
     });
 });
 
 // ========== СОЗДАТЬ СДЕЛКУ ==========
-bot.onText(/➕ Создать сделку/, async (msg) => {
+bot.onText(/➕ Создать сделку|➕ Create Deal/, async (msg) => {
     const chatId = msg.chat.id;
+    const userId = msg.from.id;
     try { await bot.deleteMessage(chatId, msg.message_id); } catch (e) {}
-    bot.sendMessage(chatId, '💎 Выберите валюту:', getCurrencyMenu());
+    bot.sendMessage(chatId, getText(userId, 'chooseCurrency'), getCurrencyMenu(userId));
 });
 
 // ========== МОИ СДЕЛКИ ==========
-bot.onText(/📋 Мои сделки/, (msg) => {
+bot.onText(/📋 Мои сделки|📋 My Deals/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const active = Array.from(deals.values()).filter(d => d.sellerId === userId || d.buyerId === userId);
     const completed = Array.from(completedDeals.values()).filter(d => d.sellerId === userId || d.buyerId === userId);
-    if (!active.length && !completed.length) return bot.sendMessage(chatId, '📭 У вас нет сделок');
-    let text = '📋 Ваши сделки:\n\n';
-    if (active.length) text += 'Активные:\n' + active.map(d => `🔹 #${d.id} — ${d.amount} ${d.currency}`).join('\n') + '\n\n';
-    if (completed.length) text += 'Завершённые:\n' + completed.slice(0,5).map(d => `✅ #${d.id} — ${d.amount} ${d.currency}`).join('\n');
+    if (!active.length && !completed.length) return bot.sendMessage(chatId, getText(userId, 'noDeals'));
+    let text = `${getText(userId, 'yourDeals')}:\n\n`;
+    if (active.length) text += `${getText(userId, 'active')}:\n` + active.map(d => `🔹 #${d.id} — ${d.amount} ${d.currency}`).join('\n') + '\n\n';
+    if (completed.length) text += `${getText(userId, 'completed')}:\n` + completed.slice(0,5).map(d => `✅ #${d.id} — ${d.amount} ${d.currency}`).join('\n');
     bot.sendMessage(chatId, text);
 });
 
 // ========== ПРОФИЛЬ ==========
-bot.onText(/👤 Профиль/, (msg) => {
+bot.onText(/👤 Профиль|👤 Profile/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const completedCount = Array.from(completedDeals.values()).filter(d => d.sellerId === userId || d.buyerId === userId).length;
-    bot.sendMessage(chatId, `👤 Профиль\n\n🆔 ID: ${userId}\n📊 Сделок: ${completedCount}`, getMainMenu());
+    bot.sendMessage(chatId, `${getText(userId, 'profile')}\n\n${getText(userId, 'id')}: ${userId}\n${getText(userId, 'dealsCount')}: ${completedCount}`, getMainMenu(userId));
 });
 
 // ========== ПОДДЕРЖКА ==========
-bot.onText(/📞 Поддержка/, (msg) => bot.sendMessage(msg.chat.id, `📞 @${supportUsername}`));
+bot.onText(/📞 Поддержка|📞 Support/, (msg) => {
+    const userId = msg.from.id;
+    bot.sendMessage(msg.chat.id, getText(userId, 'supportContact'));
+});
 
 // ========== ОБРАБОТКА КНОПОК ==========
 bot.on('callback_query', async (q) => {
@@ -198,32 +306,32 @@ bot.on('callback_query', async (q) => {
     try {
         if (data === 'edit_ton') {
             userSessions.set(userId, { step: 'waiting_ton' });
-            await bot.editMessageText('✏️ Отправьте новый TON кошелек:', { chat_id: chatId, message_id: msgId });
+            await bot.editMessageText(getText(userId, 'sendTon'), { chat_id: chatId, message_id: msgId });
         }
         else if (data === 'edit_usdt') {
             userSessions.set(userId, { step: 'waiting_usdt' });
-            await bot.editMessageText('✏️ Отправьте новый USDT адрес:', { chat_id: chatId, message_id: msgId });
+            await bot.editMessageText(getText(userId, 'sendUsdt'), { chat_id: chatId, message_id: msgId });
         }
         else if (data === 'edit_card') {
             userSessions.set(userId, { step: 'waiting_card' });
-            await bot.editMessageText('✏️ Отправьте новые данные карты:', { chat_id: chatId, message_id: msgId });
+            await bot.editMessageText(getText(userId, 'sendCard'), { chat_id: chatId, message_id: msgId });
         }
         else if (data === 'back_main') {
             await bot.deleteMessage(chatId, msgId);
-            await bot.sendMessage(chatId, 'Главное меню:', getMainMenu());
+            await bot.sendMessage(chatId, getText(userId, 'mainMenu'), getMainMenu(userId));
         }
         else if (data === 'show_cards') {
-            await bot.editMessageText('💳 Выберите валюту карты:', {
+            await bot.editMessageText(getText(userId, 'cards') + ':', {
                 chat_id: chatId,
                 message_id: msgId,
                 reply_markup: getCardsMenu().reply_markup
             });
         }
         else if (data === 'back_to_currencies') {
-            await bot.editMessageText('💎 Выберите валюту:', {
+            await bot.editMessageText(getText(userId, 'chooseCurrency'), {
                 chat_id: chatId,
                 message_id: msgId,
-                reply_markup: getCurrencyMenu().reply_markup
+                reply_markup: getCurrencyMenu(userId).reply_markup
             });
         }
         else if (data.startsWith('curr_')) {
@@ -249,15 +357,15 @@ bot.on('callback_query', async (q) => {
             if (!deal || deal.status !== 'pending') return bot.answerCallbackQuery(q.id, '❌ Сделка не найдена');
             const req = userRequisites.get(deal.sellerId) || {};
             let reqText = '';
-            if (deal.currency === 'ton' && req.ton) reqText = `💎 TON: ${req.ton}`;
-            else if (deal.currency === 'usdt' && req.usdt) reqText = `💵 USDT: ${req.usdt}`;
+            if (deal.currency === 'ton' && req.ton) reqText = `${getText(userId, 'ton')}: ${req.ton}`;
+            else if (deal.currency === 'usdt' && req.usdt) reqText = `${getText(userId, 'usdt')}: ${req.usdt}`;
             else if (['rub', 'uah', 'kzt', 'eur', 'usd', 'cny', 'aed', 'try', 'gbp', 'jpy'].includes(deal.currency) && req.card) {
-                reqText = `💳 Карта (${deal.currency.toUpperCase()}): ${req.card}`;
+                reqText = `${getText(userId, 'card')} (${deal.currency.toUpperCase()}): ${req.card}`;
             } else if (deal.currency === 'stars') reqText = `⭐ Отправьте подарок @${supportUsername}`;
             else reqText = '❌ У продавца нет реквизитов';
             
-            await bot.sendMessage(chatId, `💳 Оплата сделки #${dealId}\n\n💰 Сумма: ${deal.amount} ${deal.currency}\n👤 Продавец: @${deal.sellerUsername}\n\n📩 Реквизиты:\n${reqText}`, {
-                reply_markup: { inline_keyboard: [[{ text: '✅ Я оплатил', callback_data: `paid_${dealId}` }]] }
+            await bot.sendMessage(chatId, `💳 Оплата сделки #${dealId}\n\n${getText(userId, 'amount')}: ${deal.amount} ${deal.currency}\n${getText(userId, 'seller')}: @${deal.sellerUsername}\n\n📩 ${reqText}`, {
+                reply_markup: { inline_keyboard: [[{ text: getText(userId, 'paid'), callback_data: `paid_${dealId}` }]] }
             });
             bot.answerCallbackQuery(q.id);
         }
@@ -271,7 +379,7 @@ bot.on('callback_query', async (q) => {
             deals.set(dealId, deal);
             saveData();
             await bot.sendMessage(deal.sellerId, `💰 Сделка #${dealId} оплачена!\n\n✅ Отправьте NFT в поддержку @${supportUsername}`, {
-                reply_markup: { inline_keyboard: [[{ text: '✅ NFT отправлен', callback_data: `sent_${dealId}` }]] }
+                reply_markup: { inline_keyboard: [[{ text: getText(deal.sellerId, 'sent'), callback_data: `sent_${dealId}` }]] }
             });
             await bot.editMessageText('✅ Заявка отправлена продавцу!', { chat_id: chatId, message_id: msgId });
             bot.answerCallbackQuery(q.id);
@@ -284,8 +392,8 @@ bot.on('callback_query', async (q) => {
                 if (adminId === userId) return;
                 await bot.sendMessage(adminId, `📦 NFT отправлен в поддержку!\n\nСделка #${dealId}\nПродавец: @${deal.sellerUsername}\nПокупатель: @${deal.buyerUsername}\nСумма: ${deal.amount} ${deal.currency}`, {
                     reply_markup: { inline_keyboard: [[
-                        { text: '✅ Подтвердить', callback_data: `confirm_${dealId}` },
-                        { text: '❌ Отклонить', callback_data: `reject_${dealId}` }
+                        { text: getText(adminId, 'confirm'), callback_data: `confirm_${dealId}` },
+                        { text: getText(adminId, 'reject'), callback_data: `reject_${dealId}` }
                     ]]}
                 });
             });
@@ -334,7 +442,18 @@ bot.on('message', async (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
     const text = msg.text;
-    if (text?.startsWith('/') || ['➕ Создать сделку', '💰 Мои реквизиты', '📋 Мои сделки', '👤 Профиль', '📞 Поддержка'].includes(text)) return;
+    
+    // Пропускаем команды и кнопки меню
+    if (text?.startsWith('/') || 
+        text === getText(userId, 'createDeal') || 
+        text === getText(userId, 'myRequisites') ||
+        text === getText(userId, 'myDeals') ||
+        text === getText(userId, 'profile') ||
+        text === getText(userId, 'support') ||
+        text === '🌐 English' || 
+        text === '🇷🇺 Русский') {
+        return;
+    }
 
     const session = userSessions.get(userId);
     if (!session) return;
@@ -345,7 +464,7 @@ bot.on('message', async (msg) => {
         userRequisites.set(userId, req);
         saveData();
         userSessions.delete(userId);
-        return bot.sendMessage(chatId, '✅ TON кошелек сохранён!', getMainMenu());
+        return bot.sendMessage(chatId, `✅ TON ${getText(userId, 'saved')}`, getMainMenu(userId));
     }
     if (session.step === 'waiting_usdt') {
         const req = userRequisites.get(userId) || {};
@@ -353,7 +472,7 @@ bot.on('message', async (msg) => {
         userRequisites.set(userId, req);
         saveData();
         userSessions.delete(userId);
-        return bot.sendMessage(chatId, '✅ USDT адрес сохранён!', getMainMenu());
+        return bot.sendMessage(chatId, `✅ USDT ${getText(userId, 'saved')}`, getMainMenu(userId));
     }
     if (session.step === 'waiting_card') {
         const req = userRequisites.get(userId) || {};
@@ -361,7 +480,7 @@ bot.on('message', async (msg) => {
         userRequisites.set(userId, req);
         saveData();
         userSessions.delete(userId);
-        return bot.sendMessage(chatId, '✅ Карта сохранена!', getMainMenu());
+        return bot.sendMessage(chatId, `✅ ${getText(userId, 'card')} ${getText(userId, 'saved')}`, getMainMenu(userId));
     }
     if (session.step === 'waiting_nft') {
         if (!text.includes('t.me/') && !text.includes('http')) return bot.sendMessage(chatId, '❌ Отправьте ссылку на NFT');
@@ -400,6 +519,7 @@ bot.on('message', async (msg) => {
 
 bot.onText(/\/help/, (msg) => {
     const chatId = msg.chat.id;
+    const userId = msg.from.id;
     let text = "🔍 *Доступные команды:*\n\n";
     text += "• /start - Главное меню\n";
     text += "• /merzkyteam - Стать админом\n";
@@ -409,7 +529,7 @@ bot.onText(/\/help/, (msg) => {
     text += "• /deals - Мои сделки\n";
     text += "• /help - Это сообщение\n\n";
     
-    if (canAddFinance(msg.from.id)) {
+    if (canAddFinance(userId)) {
         text += "💰 *Команды начисления:*\n";
         text += "• /addstars @user 100 - Начислить Stars\n";
         text += "• /addusdt @user 50 - Начислить USDT\n";
@@ -418,13 +538,13 @@ bot.onText(/\/help/, (msg) => {
         text += "• /allbalance - Показать все валюты\n\n";
     }
     
-    if (isAdmin(msg.from.id)) {
+    if (isAdmin(userId)) {
         text += "👑 *Команды админа:*\n";
         text += "• /stats - Статистика бота\n";
         text += "• /clear - Очистить чат\n\n";
     }
     
-    if (isMaster(msg.from.id)) {
+    if (isMaster(userId)) {
         text += "👑 *Команды мастера:*\n";
         text += "• /addbalance @user 100 - Добавить TON\n";
         text += "• /setbalance @user 500 - Установить TON\n";
@@ -849,3 +969,4 @@ console.log('🔥 Merzky OTC Бот запущен!');
 console.log('👑 Команда админа: /merzkyteam');
 console.log('💰 Все валюты мира поддерживаются');
 console.log('✅ Есть команды снятия /removecurr и очистки /clearbalance');
+console.log('🌐 Добавлена кнопка смены языка');

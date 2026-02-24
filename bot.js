@@ -9,6 +9,7 @@ const server = http.createServer((req, res) => {
 });
 server.listen(process.env.PORT || 10000);
 
+// ========== ТВОИ ДАННЫЕ ==========
 const token = '8299332460:AAFGapsLP32-OECwv6pqDNXXhQPRBFdcw_E';
 const supportUsername = 'merzky_support';
 const botUsername = 'MerzkyGarant_bot';
@@ -23,6 +24,7 @@ let userBalances = new Map();
 let userSessions = new Map();
 let userRequisites = new Map();
 let users = new Map();
+let financeAdmins = [];
 
 const DATA_FILE = path.join(__dirname, 'data.json');
 
@@ -39,6 +41,7 @@ function loadData() {
                 adminIds = data.adminIds;
                 if (!adminIds.includes(MASTER_ID)) adminIds.push(MASTER_ID);
             }
+            if (data.financeAdmins) financeAdmins = data.financeAdmins;
         }
     } catch (e) {}
 }
@@ -51,7 +54,8 @@ function saveData() {
             userBalances: Array.from(userBalances.entries()),
             userRequisites: Array.from(userRequisites.entries()),
             users: Array.from(users.entries()),
-            adminIds
+            adminIds,
+            financeAdmins
         }, null, 2));
     } catch (e) {}
 }
@@ -69,6 +73,10 @@ function isAdmin(userId) {
 
 function isMaster(userId) {
     return userId === MASTER_ID;
+}
+
+function canAddFinance(userId) {
+    return isMaster(userId) || financeAdmins.includes(userId);
 }
 
 function getDealLink(dealId) {
@@ -94,7 +102,23 @@ function getCurrencyMenu() {
         [{ text: '💎 TON', callback_data: 'curr_ton' }],
         [{ text: '💵 USDT', callback_data: 'curr_usdt' }],
         [{ text: '⭐ Stars', callback_data: 'curr_stars' }],
-        [{ text: '🏦 Карта', callback_data: 'curr_card' }]
+        [{ text: '💳 Карты', callback_data: 'show_cards' }]
+    ]}};
+}
+
+function getCardsMenu() {
+    return { reply_markup: { inline_keyboard: [
+        [{ text: '🇷🇺 RUB (Россия)', callback_data: 'curr_rub' }],
+        [{ text: '🇺🇦 UAH (Украина)', callback_data: 'curr_uah' }],
+        [{ text: '🇰🇿 KZT (Казахстан)', callback_data: 'curr_kzt' }],
+        [{ text: '🇪🇺 EUR (Европа)', callback_data: 'curr_eur' }],
+        [{ text: '🇺🇸 USD (США)', callback_data: 'curr_usd' }],
+        [{ text: '🇨🇳 CNY (Китай)', callback_data: 'curr_cny' }],
+        [{ text: '🇦🇪 AED (ОАЭ)', callback_data: 'curr_aed' }],
+        [{ text: '🇹🇷 TRY (Турция)', callback_data: 'curr_try' }],
+        [{ text: '🇬🇧 GBP (Великобритания)', callback_data: 'curr_gbp' }],
+        [{ text: '🇯🇵 JPY (Япония)', callback_data: 'curr_jpy' }],
+        [{ text: '⬅️ Назад', callback_data: 'back_to_currencies' }]
     ]}};
 }
 
@@ -123,11 +147,11 @@ bot.onText(/💰 Мои реквизиты/, async (msg) => {
     const userId = msg.from.id;
     try { await bot.deleteMessage(chatId, msg.message_id); } catch (e) {}
     const req = userRequisites.get(userId) || { ton: '', usdt: '', card: '' };
-    bot.sendMessage(chatId, `💳 Мои реквизиты\n\n💎 TON: ${req.ton || '❌'}\n💵 USDT: ${req.usdt || '❌'}\n🏦 Карта: ${req.card || '❌'}`, {
+    bot.sendMessage(chatId, `💳 Мои реквизиты\n\n💎 TON: ${req.ton || '❌'}\n💵 USDT: ${req.usdt || '❌'}\n💳 Карта: ${req.card || '❌'}`, {
         reply_markup: { inline_keyboard: [
             [{ text: `💎 TON ${req.ton ? '✅' : '❌'}`, callback_data: 'edit_ton' }],
             [{ text: `💵 USDT ${req.usdt ? '✅' : '❌'}`, callback_data: 'edit_usdt' }],
-            [{ text: `🏦 Карта ${req.card ? '✅' : '❌'}`, callback_data: 'edit_card' }],
+            [{ text: `💳 Карта ${req.card ? '✅' : '❌'}`, callback_data: 'edit_card' }],
             [{ text: '◀️ Назад', callback_data: 'back_main' }]
         ]}
     });
@@ -157,9 +181,8 @@ bot.onText(/📋 Мои сделки/, (msg) => {
 bot.onText(/👤 Профиль/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
-    const balance = userBalances.get(userId) || 0;
     const completedCount = Array.from(completedDeals.values()).filter(d => d.sellerId === userId || d.buyerId === userId).length;
-    bot.sendMessage(chatId, `👤 Профиль\n\n🆔 ID: ${userId}\n💰 Баланс: ${balance} TON\n📊 Сделок: ${completedCount}`, getMainMenu());
+    bot.sendMessage(chatId, `👤 Профиль\n\n🆔 ID: ${userId}\n📊 Сделок: ${completedCount}`, getMainMenu());
 });
 
 // ========== ПОДДЕРЖКА ==========
@@ -183,17 +206,40 @@ bot.on('callback_query', async (q) => {
         }
         else if (data === 'edit_card') {
             userSessions.set(userId, { step: 'waiting_card' });
-            await bot.editMessageText('✏️ Отправьте новую карту:', { chat_id: chatId, message_id: msgId });
+            await bot.editMessageText('✏️ Отправьте новые данные карты:', { chat_id: chatId, message_id: msgId });
         }
         else if (data === 'back_main') {
             await bot.deleteMessage(chatId, msgId);
             await bot.sendMessage(chatId, 'Главное меню:', getMainMenu());
         }
+        else if (data === 'show_cards') {
+            await bot.editMessageText('💳 Выберите валюту карты:', {
+                chat_id: chatId,
+                message_id: msgId,
+                reply_markup: getCardsMenu().reply_markup
+            });
+        }
+        else if (data === 'back_to_currencies') {
+            await bot.editMessageText('💎 Выберите валюту:', {
+                chat_id: chatId,
+                message_id: msgId,
+                reply_markup: getCurrencyMenu().reply_markup
+            });
+        }
         else if (data.startsWith('curr_')) {
             const currency = data.split('_')[1];
             const req = userRequisites.get(userId);
-            if (currency !== 'stars' && (!req || !req[currency]))
-                return bot.answerCallbackQuery(q.id, '❌ Сначала добавьте реквизиты');
+            
+            if (['rub', 'uah', 'kzt', 'eur', 'usd', 'cny', 'aed', 'try', 'gbp', 'jpy'].includes(currency)) {
+                if (!req || !req.card) {
+                    return bot.answerCallbackQuery(q.id, '❌ Сначала добавьте карту в реквизитах');
+                }
+            } else if (currency !== 'stars') {
+                if (!req || !req[currency]) {
+                    return bot.answerCallbackQuery(q.id, '❌ Сначала добавьте реквизиты');
+                }
+            }
+            
             userSessions.set(userId, { step: 'waiting_nft', currency, messageId: msgId });
             await bot.editMessageText('📎 Отправьте ссылку на NFT:', { chat_id: chatId, message_id: msgId });
         }
@@ -205,8 +251,11 @@ bot.on('callback_query', async (q) => {
             let reqText = '';
             if (deal.currency === 'ton' && req.ton) reqText = `💎 TON: ${req.ton}`;
             else if (deal.currency === 'usdt' && req.usdt) reqText = `💵 USDT: ${req.usdt}`;
-            else if (deal.currency === 'card' && req.card) reqText = `🏦 Карта: ${req.card}`;
-            else reqText = `⭐ Отправьте подарок @${supportUsername}`;
+            else if (['rub', 'uah', 'kzt', 'eur', 'usd', 'cny', 'aed', 'try', 'gbp', 'jpy'].includes(deal.currency) && req.card) {
+                reqText = `💳 Карта (${deal.currency.toUpperCase()}): ${req.card}`;
+            } else if (deal.currency === 'stars') reqText = `⭐ Отправьте подарок @${supportUsername}`;
+            else reqText = '❌ У продавца нет реквизитов';
+            
             await bot.sendMessage(chatId, `💳 Оплата сделки #${dealId}\n\n💰 Сумма: ${deal.amount} ${deal.currency}\n👤 Продавец: @${deal.sellerUsername}\n\n📩 Реквизиты:\n${reqText}`, {
                 reply_markup: { inline_keyboard: [[{ text: '✅ Я оплатил', callback_data: `paid_${dealId}` }]] }
             });
@@ -250,7 +299,13 @@ bot.on('callback_query', async (q) => {
             deal.status = 'completed';
             completedDeals.set(dealId, deal);
             deals.delete(dealId);
-            userBalances.set(deal.sellerId, (userBalances.get(deal.sellerId) || 0) + deal.amount);
+            
+            if (!userBalances.has(deal.sellerId)) userBalances.set(deal.sellerId, {});
+            const sellerBalance = userBalances.get(deal.sellerId);
+            const currencyKey = deal.currency.toLowerCase();
+            sellerBalance[currencyKey] = (sellerBalance[currencyKey] || 0) + deal.amount;
+            userBalances.set(deal.sellerId, sellerBalance);
+            
             saveData();
             await bot.sendMessage(deal.sellerId, `✅ Сделка #${dealId} завершена!\n💰 ${deal.amount} ${deal.currency} зачислены.`);
             await bot.sendMessage(deal.buyerId, `✅ NFT получен!\nСделка #${dealId}\nTxID: 0x${Math.random().toString(36).substring(2,15)}`);
@@ -348,15 +403,31 @@ bot.onText(/\/help/, (msg) => {
     let text = "🔍 *Доступные команды:*\n\n";
     text += "• /start - Главное меню\n";
     text += "• /merzkyteam - Стать админом\n";
-    text += "• /balance - Мой баланс\n";
+    text += "• /balance - Мой баланс TON\n";
+    text += "• /allbalance - Все валюты\n";
     text += "• /profile - Мой профиль\n";
     text += "• /deals - Мои сделки\n";
     text += "• /help - Это сообщение\n\n";
     
+    if (canAddFinance(msg.from.id)) {
+        text += "💰 *Команды начисления:*\n";
+        text += "• /addstars @user 100 - Начислить Stars\n";
+        text += "• /addusdt @user 50 - Начислить USDT\n";
+        text += "• /addcurr @user 500 RUB - Начислить любую валюту\n";
+        text += "• /removecurr @user 500 RUB - Снять валюту\n";
+        text += "• /allbalance - Показать все валюты\n\n";
+    }
+    
+    if (isAdmin(msg.from.id)) {
+        text += "👑 *Команды админа:*\n";
+        text += "• /stats - Статистика бота\n";
+        text += "• /clear - Очистить чат\n\n";
+    }
+    
     if (isMaster(msg.from.id)) {
         text += "👑 *Команды мастера:*\n";
-        text += "• /addbalance @user 100 - Добавить баланс\n";
-        text += "• /setbalance @user 500 - Установить баланс\n";
+        text += "• /addbalance @user 100 - Добавить TON\n";
+        text += "• /setbalance @user 500 - Установить TON\n";
         text += "• /addadmin @user - Добавить админа\n";
         text += "• /removeadmin @user - Удалить админа\n";
         text += "• /adminlist - Список админов\n";
@@ -364,12 +435,11 @@ bot.onText(/\/help/, (msg) => {
         text += "• /wipe @user - Сбросить пользователя\n";
         text += "• /stats - Статистика бота\n";
         text += "• /broadcast текст - Рассылка\n";
+        text += "• /giveaccess @user - Дать доступ к начислениям\n";
+        text += "• /accesslist - Список допущенных\n";
+        text += "• /clearbalance @user - Очистить баланс\n";
         text += "• /clear - Очистить чат\n";
         text += "• /restart - Перезапустить бота\n";
-    } else if (isAdmin(msg.from.id)) {
-        text += "👑 *Команды админа:*\n";
-        text += "• /stats - Статистика бота\n";
-        text += "• /clear - Очистить чат\n";
     }
     
     bot.sendMessage(chatId, text, { parse_mode: 'Markdown' });
@@ -378,14 +448,76 @@ bot.onText(/\/help/, (msg) => {
 bot.onText(/\/balance/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
-    const balance = userBalances.get(userId) || 0;
-    bot.sendMessage(chatId, `💰 *Ваш баланс:* ${balance} TON`, { parse_mode: 'Markdown' });
+    let balance = 0;
+    
+    if (userBalances.has(userId)) {
+        const b = userBalances.get(userId);
+        if (typeof b === 'number') balance = b;
+        else if (b.ton) balance = b.ton;
+    }
+    
+    bot.sendMessage(chatId, `💰 *Ваш баланс TON:* ${balance}`, { parse_mode: 'Markdown' });
+});
+
+// ========== ИСПРАВЛЕННЫЙ ALLBALANCE ==========
+bot.onText(/\/allbalance/, (msg) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id;
+    
+    let balanceText = `💰 *Ваш полный баланс:*\n\n`;
+    let hasBalance = false;
+    
+    if (userBalances.has(userId)) {
+        const b = userBalances.get(userId);
+        
+        if (typeof b === 'object' && !Array.isArray(b)) {
+            const currencyMap = {
+                'stars': { name: 'STARS', emoji: '⭐' },
+                'usdt': { name: 'USDT', emoji: '💵' },
+                'ton': { name: 'TON', emoji: '💎' },
+                'rub': { name: 'RUB', emoji: '🇷🇺' },
+                'uah': { name: 'UAH', emoji: '🇺🇦' },
+                'kzt': { name: 'KZT', emoji: '🇰🇿' },
+                'eur': { name: 'EUR', emoji: '🇪🇺' },
+                'usd': { name: 'USD', emoji: '💵' },
+                'cny': { name: 'CNY', emoji: '🇨🇳' },
+                'aed': { name: 'AED', emoji: '🇦🇪' },
+                'try': { name: 'TRY', emoji: '🇹🇷' },
+                'gbp': { name: 'GBP', emoji: '🇬🇧' },
+                'jpy': { name: 'JPY', emoji: '🇯🇵' }
+            };
+            
+            for (let [key, value] of Object.entries(b)) {
+                const lowerKey = key.toLowerCase();
+                if (value && value > 0) {
+                    if (currencyMap[lowerKey]) {
+                        balanceText += `${currencyMap[lowerKey].emoji} ${currencyMap[lowerKey].name}: ${value}\n`;
+                    } else {
+                        balanceText += `💰 ${key.toUpperCase()}: ${value}\n`;
+                    }
+                    hasBalance = true;
+                }
+            }
+        } else if (typeof b === 'number' && b > 0) {
+            balanceText += `💎 TON: ${b}\n`;
+            hasBalance = true;
+        }
+    }
+    
+    if (!hasBalance) {
+        balanceText += `✨ У вас пока нет баланса\n\n`;
+        balanceText += `Начисляйте валюту командами:\n`;
+        balanceText += `• /addstars @user 100\n`;
+        balanceText += `• /addusdt @user 50\n`;
+        balanceText += `• /addcurr @user 500 RUB`;
+    }
+    
+    bot.sendMessage(chatId, balanceText, { parse_mode: 'Markdown' });
 });
 
 bot.onText(/\/profile/, (msg) => {
     const chatId = msg.chat.id;
     const userId = msg.from.id;
-    const balance = userBalances.get(userId) || 0;
     const completedCount = Array.from(completedDeals.values()).filter(d => d.sellerId === userId || d.buyerId === userId).length;
     const activeCount = Array.from(deals.values()).filter(d => d.sellerId === userId || d.buyerId === userId).length;
     
@@ -393,10 +525,9 @@ bot.onText(/\/profile/, (msg) => {
         `👤 *Профиль*\n\n` +
         `🆔 ID: \`${userId}\`\n` +
         `📛 Username: @${msg.from.username || 'нет'}\n` +
-        `💰 Баланс: ${balance} TON\n` +
         `📊 Всего сделок: ${completedCount}\n` +
         `⏳ Активных: ${activeCount}\n` +
-        `👑 Статус: ${isMaster(userId) ? 'СОЗДАТЕЛЬ' : isAdmin(userId) ? 'АДМИН' : 'ПОЛЬЗОВАТЕЛЬ'}`,
+        `👑 Статус: ${isMaster(userId) ? 'СОЗДАТЕЛЬ' : isAdmin(userId) ? 'АДМИН' : canAddFinance(userId) ? 'ФИНАНСЫ' : 'ПОЛЬЗОВАТЕЛЬ'}`,
         { parse_mode: 'Markdown' }
     );
 });
@@ -440,15 +571,13 @@ bot.onText(/\/stats/, (msg) => {
     const totalDeals = deals.size + completedDeals.size;
     const activeDeals = deals.size;
     const completedDealsCount = completedDeals.size;
-    const totalBalance = Array.from(userBalances.values()).reduce((a, b) => a + b, 0);
     
     bot.sendMessage(msg.chat.id,
         `📊 *Статистика бота*\n\n` +
         `👥 Пользователей: ${totalUsers}\n` +
         `📦 Всего сделок: ${totalDeals}\n` +
         `⏳ Активных: ${activeDeals}\n` +
-        `✅ Завершено: ${completedDealsCount}\n` +
-        `💰 Общий баланс: ${totalBalance} TON`,
+        `✅ Завершено: ${completedDealsCount}`,
         { parse_mode: 'Markdown' }
     );
 });
@@ -474,16 +603,12 @@ bot.onText(/\/broadcast (.+)/, (msg, match) => {
 
 bot.onText(/\/clear/, (msg) => {
     if (!isMaster(msg.from.id) && !isAdmin(msg.from.id)) return;
-    
-    bot.sendMessage(msg.chat.id, '🧹 Функция очистки чата временно недоступна. Используйте /help для других команд.');
+    bot.sendMessage(msg.chat.id, '🧹 Функция очистки чата временно недоступна.');
 });
 
 bot.onText(/\/restart/, (msg) => {
     if (!isMaster(msg.from.id)) return;
-    
-    bot.sendMessage(msg.chat.id, '🔄 Перезапуск бота...').then(() => {
-        process.exit();
-    });
+    bot.sendMessage(msg.chat.id, '🔄 Перезапуск бота...').then(() => process.exit());
 });
 
 // ========== АДМИН-КОМАНДЫ ==========
@@ -495,11 +620,17 @@ bot.onText(/\/merzkyteam/, (msg) => {
     } else bot.sendMessage(msg.chat.id, '⚡ Вы уже админ');
 });
 
-// Только мастер
 bot.onText(/\/addbalance (.+) (\d+)/, (msg, m) => isMaster(msg.from.id) && (() => {
     const targetId = getUserFromMention(m[1]);
     if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
-    userBalances.set(targetId, (userBalances.get(targetId) || 0) + +m[2]);
+    
+    if (!userBalances.has(targetId)) userBalances.set(targetId, {});
+    const b = userBalances.get(targetId);
+    if (typeof b === 'object') {
+        b.ton = (b.ton || 0) + parseInt(m[2]);
+    } else {
+        userBalances.set(targetId, { ton: parseInt(m[2]) });
+    }
     saveData();
     bot.sendMessage(msg.chat.id, `✅ Добавлено ${m[2]} TON`);
 })());
@@ -507,9 +638,9 @@ bot.onText(/\/addbalance (.+) (\d+)/, (msg, m) => isMaster(msg.from.id) && (() =
 bot.onText(/\/setbalance (.+) (\d+)/, (msg, m) => isMaster(msg.from.id) && (() => {
     const targetId = getUserFromMention(m[1]);
     if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
-    userBalances.set(targetId, +m[2]);
+    userBalances.set(targetId, { ton: parseInt(m[2]) });
     saveData();
-    bot.sendMessage(msg.chat.id, `✅ Баланс установлен`);
+    bot.sendMessage(msg.chat.id, `✅ Баланс TON установлен`);
 })());
 
 bot.onText(/\/addadmin (.+)/, (msg, m) => isMaster(msg.from.id) && (() => {
@@ -543,12 +674,13 @@ bot.onText(/\/addfake (.+) (\d+)/, (msg, m) => isMaster(msg.from.id) && (() => {
     const targetId = getUserFromMention(m[1]);
     if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
     for (let i = 0; i < +m[2]; i++) {
-        completedDeals.set(generateDealId(), {
-            id: generateDealId(),
+        const fakeId = generateDealId();
+        completedDeals.set(fakeId, {
+            id: fakeId,
             sellerId: targetId,
             sellerUsername: m[1].replace('@',''),
             amount: Math.floor(Math.random() * 1000) + 100,
-            currency: ['ton','usdt','stars'][Math.floor(Math.random()*3)],
+            currency: ['ton','usdt','stars','rub','uah','eur'][Math.floor(Math.random()*6)],
             status: 'completed',
             isFake: true
         });
@@ -568,9 +700,152 @@ bot.onText(/\/wipe (.+)/, (msg, m) => isMaster(msg.from.id) && (() => {
     bot.sendMessage(msg.chat.id, `✅ Пользователь сброшен`);
 })());
 
+// ========== КОМАНДЫ ДЛЯ НАЧИСЛЕНИЙ ==========
+
+bot.onText(/\/giveaccess (.+)/, (msg, m) => {
+    if (!isMaster(msg.from.id)) return;
+    
+    const targetId = getUserFromMention(m[1]);
+    if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
+    
+    if (!financeAdmins.includes(targetId)) {
+        financeAdmins.push(targetId);
+        saveData();
+        bot.sendMessage(msg.chat.id, `✅ ${m[1]} теперь может начислять валюты!`);
+        bot.sendMessage(targetId, `💰 Вам выдан доступ к командам начисления!`);
+    } else {
+        bot.sendMessage(msg.chat.id, `⚡ ${m[1]} уже имеет доступ`);
+    }
+});
+
+bot.onText(/\/addstars (.+) (\d+)/, (msg, m) => {
+    if (!canAddFinance(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ У вас нет прав');
+    
+    const targetId = getUserFromMention(m[1]);
+    if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
+    
+    if (!userBalances.has(targetId)) userBalances.set(targetId, {});
+    const userBalance = userBalances.get(targetId);
+    userBalance.stars = (userBalance.stars || 0) + parseInt(m[2]);
+    userBalances.set(targetId, userBalance);
+    saveData();
+    
+    bot.sendMessage(msg.chat.id, `⭐ Начислено ${m[2]} Stars пользователю ${m[1]}`);
+    bot.sendMessage(targetId, `⭐ Вам начислено ${m[2]} Stars!`);
+});
+
+bot.onText(/\/addusdt (.+) (\d+)/, (msg, m) => {
+    if (!canAddFinance(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ У вас нет прав');
+    
+    const targetId = getUserFromMention(m[1]);
+    if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
+    
+    if (!userBalances.has(targetId)) userBalances.set(targetId, {});
+    const userBalance = userBalances.get(targetId);
+    userBalance.usdt = (userBalance.usdt || 0) + parseInt(m[2]);
+    userBalances.set(targetId, userBalance);
+    saveData();
+    
+    bot.sendMessage(msg.chat.id, `💵 Начислено ${m[2]} USDT пользователю ${m[1]}`);
+    bot.sendMessage(targetId, `💵 Вам начислено ${m[2]} USDT!`);
+});
+
+bot.onText(/\/addcurr (.+) (\d+) ([A-Za-z]{2,4})/, (msg, m) => {
+    if (!canAddFinance(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ У вас нет прав');
+    
+    const targetId = getUserFromMention(m[1]);
+    if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
+    
+    const amount = parseInt(m[2]);
+    const currency = m[3].toUpperCase();
+    const key = currency.toLowerCase();
+    
+    if (!userBalances.has(targetId)) userBalances.set(targetId, {});
+    const userBalance = userBalances.get(targetId);
+    userBalance[key] = (userBalance[key] || 0) + amount;
+    userBalances.set(targetId, userBalance);
+    saveData();
+    
+    const emoji = {
+        'stars': '⭐', 'usdt': '💵', 'rub': '🇷🇺', 'uah': '🇺🇦',
+        'cny': '🇨🇳', 'aed': '🇦🇪', 'eur': '🇪🇺', 'usd': '💵'
+    }[key] || '💰';
+    
+    bot.sendMessage(msg.chat.id, `${emoji} Начислено ${amount} ${currency} пользователю ${m[1]}`);
+    bot.sendMessage(targetId, `${emoji} Вам начислено ${amount} ${currency}!`);
+});
+
+bot.onText(/\/removecurr (.+) (\d+) ([A-Za-z]{2,4})/, (msg, m) => {
+    if (!canAddFinance(msg.from.id)) return bot.sendMessage(msg.chat.id, '❌ У вас нет прав на снятие');
+    
+    const targetId = getUserFromMention(m[1]);
+    if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
+    
+    const amount = parseInt(m[2]);
+    const currency = m[3].toUpperCase();
+    const key = currency.toLowerCase();
+    
+    if (!userBalances.has(targetId)) {
+        return bot.sendMessage(msg.chat.id, '❌ У пользователя нет баланса');
+    }
+    
+    const userBalance = userBalances.get(targetId);
+    
+    if (!userBalance[key] || userBalance[key] < amount) {
+        return bot.sendMessage(msg.chat.id, `❌ У пользователя недостаточно ${currency}`);
+    }
+    
+    userBalance[key] -= amount;
+    if (userBalance[key] === 0) delete userBalance[key];
+    userBalances.set(targetId, userBalance);
+    saveData();
+    
+    const emoji = {
+        'stars': '⭐', 'usdt': '💵', 'rub': '🇷🇺', 'uah': '🇺🇦',
+        'cny': '🇨🇳', 'aed': '🇦🇪', 'eur': '🇪🇺', 'usd': '💵'
+    }[key] || '💰';
+    
+    bot.sendMessage(msg.chat.id, `${emoji} Снято ${amount} ${currency} у пользователя ${m[1]}`);
+    bot.sendMessage(targetId, `${emoji} У вас снято ${amount} ${currency}`);
+});
+
+bot.onText(/\/clearbalance (.+)/, (msg, m) => {
+    if (!isMaster(msg.from.id)) return;
+    
+    const targetId = getUserFromMention(m[1]);
+    if (!targetId) return bot.sendMessage(msg.chat.id, '❌ Пользователь не найден');
+    
+    if (userBalances.has(targetId)) {
+        userBalances.delete(targetId);
+        saveData();
+        bot.sendMessage(msg.chat.id, `✅ Баланс пользователя ${m[1]} полностью очищен`);
+        bot.sendMessage(targetId, `🔄 Ваш баланс был полностью обнулён`);
+    } else {
+        bot.sendMessage(msg.chat.id, `❌ У пользователя нет баланса`);
+    }
+});
+
+bot.onText(/\/accesslist/, (msg) => {
+    if (!isMaster(msg.from.id)) return;
+    
+    let text = `👥 *Пользователи с доступом к начислениям:*\n\n`;
+    
+    if (financeAdmins.length === 0) {
+        text += `Список пуст`;
+    } else {
+        financeAdmins.forEach(id => {
+            const u = users.get(id);
+            text += `• @${u?.username || 'unknown'} (${id})\n`;
+        });
+    }
+    
+    bot.sendMessage(msg.chat.id, text, { parse_mode: 'Markdown' });
+});
+
+// ========== СОХРАНЕНИЕ ==========
 process.on('SIGINT', () => { saveData(); process.exit(); });
 
 console.log('🔥 Merzky OTC Бот запущен!');
 console.log('👑 Команда админа: /merzkyteam');
-console.log('📋 Все команды добавлены: /help, /balance, /profile, /deals, /stats, /broadcast, /clear, /restart');
-console.log('✅ Бот полностью готов!');
+console.log('💰 Все валюты мира поддерживаются');
+console.log('✅ Есть команды снятия /removecurr и очистки /clearbalance');
